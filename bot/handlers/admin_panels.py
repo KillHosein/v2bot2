@@ -2,6 +2,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 from telegram.constants import ParseMode
 from html import escape as html_escape
+import time
 import re
 
 from ..db import query_db, execute_db
@@ -27,6 +28,15 @@ async def admin_panels_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     query = update.callback_query
     if query:
         await query.answer()
+
+    try:
+        now = time.monotonic()
+        last = context.user_data.get('admin_panels_menu_ts')
+        if last and (now - float(last)) < 1.5:
+            return ADMIN_PANELS_MENU
+        context.user_data['admin_panels_menu_ts'] = now
+    except Exception:
+        pass
 
     panels = query_db("SELECT id, name, panel_type, url, COALESCE(sub_base, '') AS sub_base, COALESCE(enabled,1) AS enabled FROM panels ORDER BY id DESC")
 
