@@ -19,7 +19,7 @@ from ..states import (
     ADMIN_PANEL_INBOUNDS_AWAIT_PROTOCOL,
     ADMIN_PANEL_INBOUNDS_AWAIT_TAG,
 )
-from ..helpers.tg import safe_edit_text as _safe_edit_text
+from ..helpers.tg import safe_edit_text as _safe_edit_text, safe_edit_message
 from ..panel import VpnPanelAPI as PanelAPI
 
 
@@ -58,7 +58,7 @@ async def admin_panels_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     sender = query.message if query else update.message
     if query:
         try:
-            await _safe_edit_text(sender, text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+            await safe_edit_message(query, text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
         except Exception:
             try:
                 await query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
