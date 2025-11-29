@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes, ConversationHandler
@@ -274,7 +275,38 @@ async def process_renewal_for_order(order_id: int, plan_id: int, context: Contex
             if not renewed_user:
                 renewed_user, message = await api.renew_user_in_panel(marz_username, plan)
         else:
-            renewed_user, message = await api.renew_user_in_panel(marz_username, plan)
+            try:
+                inbounds, _msg = api.list_inbounds()
+            except Exception:
+                inbounds = None
+            if inbounds:
+                try:
+                    for ib in inbounds:
+                        _id = ib.get('id')
+                        inbound = None
+                        try:
+                            inbound = api._fetch_inbound_detail(_id)
+                        except Exception:
+                            inbound = None
+                        if not inbound:
+                            continue
+                        settings_str = inbound.get('settings')
+                        try:
+                            settings_obj = json.loads(settings_str) if isinstance(settings_str, str) else {}
+                        except Exception:
+                            settings_obj = {}
+                        for c in (settings_obj.get('clients') or []):
+                            if c.get('email') == marz_username:
+                                inbound_id = _id
+                                break
+                        if inbound_id:
+                            break
+                except Exception:
+                    inbound_id = 0
+            if inbound_id:
+                renewed_user, message = api.renew_by_recreate_on_inbound(inbound_id, marz_username, float(plan.get('traffic_gb', 0) or 0), int(plan.get('duration_days', 0) or 0))
+            else:
+                renewed_user, message = await api.renew_user_in_panel(marz_username, plan)
     elif panel_type in ('3xui','3x-ui','3x ui','xui','x-ui','sanaei','alireza','txui','tx-ui','tx ui'):
         inbound_id = int(order.get('xui_inbound_id') or 0)
         if inbound_id:
@@ -296,7 +328,38 @@ async def process_renewal_for_order(order_id: int, plan_id: int, context: Contex
                 # Fallback to panel-level renew (e.g., Marzban-like) as last resort
                 renewed_user, message = await api.renew_user_in_panel(marz_username, plan)
         else:
-            renewed_user, message = await api.renew_user_in_panel(marz_username, plan)
+            try:
+                inbounds, _msg = api.list_inbounds()
+            except Exception:
+                inbounds = None
+            if inbounds:
+                try:
+                    for ib in inbounds:
+                        _id = ib.get('id')
+                        inbound = None
+                        try:
+                            inbound = api._fetch_inbound_detail(_id)
+                        except Exception:
+                            inbound = None
+                        if not inbound:
+                            continue
+                        settings_str = inbound.get('settings')
+                        try:
+                            settings_obj = json.loads(settings_str) if isinstance(settings_str, str) else {}
+                        except Exception:
+                            settings_obj = {}
+                        for c in (settings_obj.get('clients') or []):
+                            if c.get('email') == marz_username:
+                                inbound_id = _id
+                                break
+                        if inbound_id:
+                            break
+                except Exception:
+                    inbound_id = 0
+            if inbound_id:
+                renewed_user, message = api.renew_by_recreate_on_inbound(inbound_id, marz_username, float(plan.get('traffic_gb', 0) or 0), int(plan.get('duration_days', 0) or 0))
+            else:
+                renewed_user, message = await api.renew_user_in_panel(marz_username, plan)
     else:
         renewed_user, message = await api.renew_user_in_panel(marz_username, plan)
     if renewed_user:
