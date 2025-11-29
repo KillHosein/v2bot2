@@ -2487,39 +2487,38 @@ class ThreeXuiAPI(BasePanelAPI):
             }
             added = False; last_err = None; last_ep = None
             settings_payload = _json.dumps({"clients": [new_client]})
-        for ep in add_endpoints:
-            try:
-                # A) JSON clients array
-                r1 = self.session.post(ep, headers=json_headers, json={"id": int(inbound_id), "clients": [new_client]}, timeout=15)
-                if r1.status_code in (200, 201):
-                    try:
-                        self._clear_client_traffic(inbound_id, username, new_client.get('id') or new_client.get('uuid'))
-                    except Exception:
-                        pass
-                    added = True; last_ep = ep; break
-                # B) JSON settings string
-                r2 = self.session.post(ep, headers=json_headers, json={"id": int(inbound_id), "settings": settings_payload}, timeout=15)
-                if r2.status_code in (200, 201):
-                    try:
-                        self._clear_client_traffic(inbound_id, username, new_client.get('id') or new_client.get('uuid'))
-                    except Exception:
-                        pass
-                    added = True; last_ep = ep; break
-                # C) form-urlencoded settings
-                r3 = self.session.post(ep, headers=form_headers, data={"id": str(int(inbound_id)), "settings": settings_payload}, timeout=15)
-                if r3.status_code in (200, 201):
-                    try:
-                        self._clear_client_traffic(inbound_id, username, new_client.get('id') or new_client.get('uuid'))
-                    except Exception:
-                        pass
-                    added = True; last_ep = ep; break
+
+            for ep in add_endpoints:
+                try:
+                    r1 = self.session.post(ep, headers=json_headers, json={"id": int(inbound_id), "clients": [new_client]}, timeout=15)
+                    if r1.status_code in (200, 201):
+                        try:
+                            self._clear_client_traffic(inbound_id, username, new_client.get('id') or new_client.get('uuid'))
+                        except Exception:
+                            pass
+                        added = True; last_ep = ep; break
+                    r2 = self.session.post(ep, headers=json_headers, json={"id": int(inbound_id), "settings": settings_payload}, timeout=15)
+                    if r2.status_code in (200, 201):
+                        try:
+                            self._clear_client_traffic(inbound_id, username, new_client.get('id') or new_client.get('uuid'))
+                        except Exception:
+                            pass
+                        added = True; last_ep = ep; break
+                    r3 = self.session.post(ep, headers=form_headers, data={"id": str(int(inbound_id)), "settings": settings_payload}, timeout=15)
+                    if r3.status_code in (200, 201):
+                        try:
+                            self._clear_client_traffic(inbound_id, username, new_client.get('id') or new_client.get('uuid'))
+                        except Exception:
+                            pass
+                        added = True; last_ep = ep; break
                     last_err = f"{ep} -> HTTP {r1.status_code}/{r2.status_code}/{r3.status_code}"
                 except requests.RequestException:
                     last_err = f"{ep} -> EXC"
                     continue
+
             if not added:
                 return None, (last_err or "ساخت کلاینت جدید ناموفق بود")
-            # Verify by refetching inbound
+
             ref = self._fetch_inbound_detail(inbound_id)
             try:
                 robj = _json.loads(ref.get('settings')) if isinstance(ref.get('settings'), str) else (ref.get('settings') or {})
