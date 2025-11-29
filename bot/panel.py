@@ -1025,6 +1025,53 @@ class XuiAPI(BasePanelAPI):
                 continue
         return None
 
+    def _clear_client_traffic(self, inbound_id: int, email: str, client_id: str | None = None) -> bool:
+        # Try common reset/clear endpoints across forks
+        endpoints = [
+            f"{self.base_url}/xui/API/inbounds/resetClientTraffic",
+            f"{self.base_url}/panel/API/inbounds/resetClientTraffic",
+            f"{self.base_url}/xui/api/inbounds/resetClientTraffic",
+            f"{self.base_url}/panel/api/inbounds/resetClientTraffic",
+            f"{self.base_url}/xui/API/inbounds/clearClientTraffic",
+            f"{self.base_url}/panel/API/inbounds/clearClientTraffic",
+            f"{self.base_url}/xui/api/inbounds/clearClientTraffic",
+            f"{self.base_url}/panel/api/inbounds/clearClientTraffic",
+        ]
+        payloads = []
+        payloads.append({"id": int(inbound_id), "email": email})
+        if client_id:
+            payloads.append({"id": int(inbound_id), "clientId": client_id})
+            payloads.append({"id": int(inbound_id), "uuid": client_id})
+        headers = {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}
+        for ep in endpoints:
+            try:
+                for body in payloads:
+                    r = self.session.post(ep, headers=headers, json=body, timeout=10)
+                    if r.status_code in (200, 201, 202, 204):
+                        return True
+            except requests.RequestException:
+                continue
+        # Path variants with id appended
+        if client_id:
+            path_eps = [
+                f"{self.base_url}/xui/API/inbounds/resetClientTraffic/{client_id}",
+                f"{self.base_url}/panel/API/inbounds/resetClientTraffic/{client_id}",
+                f"{self.base_url}/xui/api/inbounds/resetClientTraffic/{client_id}",
+                f"{self.base_url}/panel/api/inbounds/resetClientTraffic/{client_id}",
+                f"{self.base_url}/xui/API/inbounds/clearClientTraffic/{client_id}",
+                f"{self.base_url}/panel/API/inbounds/clearClientTraffic/{client_id}",
+                f"{self.base_url}/xui/api/inbounds/clearClientTraffic/{client_id}",
+                f"{self.base_url}/panel/api/inbounds/clearClientTraffic/{client_id}",
+            ]
+            for ep in path_eps:
+                try:
+                    r = self.session.post(ep, headers=headers, json={"id": int(inbound_id)}, timeout=10)
+                    if r.status_code in (200, 201, 202, 204):
+                        return True
+                except requests.RequestException:
+                    continue
+        return False
+
     async def renew_user_in_panel(self, username, plan):
         # Login first
         if not self.get_token():
@@ -1421,15 +1468,28 @@ class XuiAPI(BasePanelAPI):
                 try:
                     r1 = self.session.post(ep, headers=json_headers, json={"id": int(inbound_id), "clients": [new_client]}, timeout=15)
                     if r1.status_code in (200, 201):
+                        try:
+                            self._clear_client_traffic(inbound_id, username, new_client.get('id') or new_client.get('uuid'))
+                        except Exception:
+                            pass
                         return new_client, "Success"
                     r2 = self.session.post(ep, headers=json_headers, json={"id": int(inbound_id), "settings": settings_payload}, timeout=15)
                     if r2.status_code in (200, 201):
+                        try:
+                            self._clear_client_traffic(inbound_id, username, new_client.get('id') or new_client.get('uuid'))
+                        except Exception:
+                            pass
                         return new_client, "Success"
                     r3 = self.session.post(ep, headers=form_headers, data={"id": str(int(inbound_id)), "settings": settings_payload}, timeout=15)
                     if r3.status_code in (200, 201):
+                        try:
+                            self._clear_client_traffic(inbound_id, username, new_client.get('id') or new_client.get('uuid'))
+                        except Exception:
+                            pass
                         return new_client, "Success"
                 except requests.RequestException:
                     continue
+
             return None, "ساخت کلاینت جدید ناموفق بود"
         except Exception as e:
             return None, str(e)
@@ -2427,20 +2487,32 @@ class ThreeXuiAPI(BasePanelAPI):
             }
             added = False; last_err = None; last_ep = None
             settings_payload = _json.dumps({"clients": [new_client]})
-            for ep in add_endpoints:
-                try:
-                    # A) JSON clients array
-                    r1 = self.session.post(ep, headers=json_headers, json={"id": int(inbound_id), "clients": [new_client]}, timeout=15)
-                    if r1.status_code in (200, 201):
-                        added = True; last_ep = ep; break
-                    # B) JSON settings string
-                    r2 = self.session.post(ep, headers=json_headers, json={"id": int(inbound_id), "settings": settings_payload}, timeout=15)
-                    if r2.status_code in (200, 201):
-                        added = True; last_ep = ep; break
-                    # C) form-urlencoded settings
-                    r3 = self.session.post(ep, headers=form_headers, data={"id": str(int(inbound_id)), "settings": settings_payload}, timeout=15)
-                    if r3.status_code in (200, 201):
-                        added = True; last_ep = ep; break
+        for ep in add_endpoints:
+            try:
+                # A) JSON clients array
+                r1 = self.session.post(ep, headers=json_headers, json={"id": int(inbound_id), "clients": [new_client]}, timeout=15)
+                if r1.status_code in (200, 201):
+                    try:
+                        self._clear_client_traffic(inbound_id, username, new_client.get('id') or new_client.get('uuid'))
+                    except Exception:
+                        pass
+                    added = True; last_ep = ep; break
+                # B) JSON settings string
+                r2 = self.session.post(ep, headers=json_headers, json={"id": int(inbound_id), "settings": settings_payload}, timeout=15)
+                if r2.status_code in (200, 201):
+                    try:
+                        self._clear_client_traffic(inbound_id, username, new_client.get('id') or new_client.get('uuid'))
+                    except Exception:
+                        pass
+                    added = True; last_ep = ep; break
+                # C) form-urlencoded settings
+                r3 = self.session.post(ep, headers=form_headers, data={"id": str(int(inbound_id)), "settings": settings_payload}, timeout=15)
+                if r3.status_code in (200, 201):
+                    try:
+                        self._clear_client_traffic(inbound_id, username, new_client.get('id') or new_client.get('uuid'))
+                    except Exception:
+                        pass
+                    added = True; last_ep = ep; break
                     last_err = f"{ep} -> HTTP {r1.status_code}/{r2.status_code}/{r3.status_code}"
                 except requests.RequestException:
                     last_err = f"{ep} -> EXC"
