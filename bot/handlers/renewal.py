@@ -308,7 +308,10 @@ async def process_renewal_for_order(order_id: int, plan_id: int, context: Contex
         except Exception:
             pass
         try:
-            _ = await api.reset_user_traffic(marz_username)
+            # Only reset usage counters for Marzban-like panels; X-UI/3x-UI/TX-UI recreate already resets usage
+            xui_types = ('3xui','3x-ui','3x ui','xui','x-ui','sanaei','alireza','txui','tx-ui','tx ui')
+            if panel_type not in xui_types:
+                _ = await api.reset_user_traffic(marz_username)
         except Exception:
             pass
         return True, "Success"

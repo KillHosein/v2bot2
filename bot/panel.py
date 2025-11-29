@@ -2777,18 +2777,20 @@ class ThreeXuiAPI(BasePanelAPI):
             return None, "به‌روزرسانی کلاینت ناموفق بود"
 
     def renew_by_known_uuid_on_inbound(self, inbound_id: int, client_uuid: str, add_gb: float = 0, add_days: int = 0):
-        """Renew a client by known UUID - RESETS traffic and days to new values."""
+        """Renew a client by known UUID.
+        When `add_gb` or `add_days` are zero, PRESERVE current limits and expiry.
+        """
         logger.info(f"[renew] 3x-UI renew_by_known_uuid: inbound={inbound_id}, uuid={client_uuid}, new_gb={add_gb}, new_days={add_days}")
-        
+
         if not self.get_token():
             logger.error("[renew] 3x-UI login failed")
             return None, "خطا در ورود به پنل 3x-UI"
-            
+
         inbound = self._fetch_inbound_detail(inbound_id)
         if not inbound:
             logger.error(f"[renew] Could not fetch inbound {inbound_id}")
             return None, "اینباند یافت نشد"
-            
+
         current_client = None
         try:
             settings_str = inbound.get('settings')
@@ -2800,30 +2802,37 @@ class ThreeXuiAPI(BasePanelAPI):
         except Exception as e:
             logger.error(f"[renew] Error parsing settings: {e}")
             return None, "خطا در خواندن تنظیمات"
-            
+
         if not current_client:
             logger.error(f"[renew] Client {client_uuid} not found in inbound {inbound_id}")
             return None, "کلاینت یافت نشد"
-            
+
         logger.info(f"[renew] Found client UUID: {client_uuid}")
-        
-        # RESET mode: set new values instead of adding
-        new_total_bytes = int(float(add_gb) * (1024 ** 3)) if add_gb and add_gb > 0 else 0
+
         cur_total = int(current_client.get('totalGB', 0) or 0)
         cur_exp = int(current_client.get('expiryTime', 0) or 0)
-        
+
+        # Compute new values: if zero additions provided, preserve existing
+        try:
+            add_bytes = int(float(add_gb) * (1024 ** 3)) if add_gb and float(add_gb) > 0 else 0
+        except Exception:
+            add_bytes = 0
+
         from datetime import datetime
         now_ms = int(datetime.now().timestamp() * 1000)
-        new_days_ms = int(add_days) * 86400 * 1000 if add_days and int(add_days) > 0 else 0
-        
-        # Reset to new values from now
-        target_exp = now_ms + new_days_ms if new_days_ms > 0 else now_ms
-        new_total = new_total_bytes
-        
-        logger.info(f"[renew] RESET mode: totalGB {cur_total} -> {new_total}, expiryTime {cur_exp} -> {target_exp}")
-        
+        try:
+            add_days_ms = int(add_days) * 86400 * 1000 if add_days and int(add_days) > 0 else 0
+        except Exception:
+            add_days_ms = 0
+
+        base_exp = max(cur_exp, now_ms)
+        new_total = cur_total if add_bytes == 0 else add_bytes
+        target_exp = cur_exp if add_days_ms == 0 else (base_exp + add_days_ms)
+
+        logger.info(f"[renew] APPLY: totalGB {cur_total} -> {new_total}, expiryTime {cur_exp} -> {target_exp}")
+
         success = self._update_client_by_uuid(inbound_id, client_uuid, new_total, target_exp, current_client)
-        
+
         if success:
             logger.info(f"[renew] 3x-UI renewal successful for uuid={client_uuid}")
             return {"totalGB": new_total, "expiryTime": target_exp}, "Success"
@@ -2832,39 +2841,117 @@ class ThreeXuiAPI(BasePanelAPI):
             return None, "به‌روزرسانی کلاینت ناموفق بود"
 
     def renew_by_recreate_on_inbound(self, inbound_id: int, username: str, add_gb: float, add_days: int):
-        """Bridge method for renewal flow - finds client UUID and calls UUID-based renewal."""
+        """Delete and re-create client to reset usage, while preserving/increasing limits."""
         logger.info(f"[renew] 3x-UI renew_by_recreate_on_inbound: inbound={inbound_id}, username={username}, add_gb={add_gb}, add_days={add_days}")
-        
+
         if not self.get_token():
             logger.error("[renew] 3x-UI login failed")
             return None, "خطا در ورود به پنل 3x-UI"
-            
-        # Find the client UUID by username
+
         inbound = self._fetch_inbound_detail(inbound_id)
         if not inbound:
             logger.error(f"[renew] Could not fetch inbound {inbound_id}")
             return None, "اینباند یافت نشد"
-            
-        client_uuid = None
+
         try:
             settings_str = inbound.get('settings')
             settings_obj = json.loads(settings_str) if isinstance(settings_str, str) else {}
-            for c in (settings_obj.get('clients') or []):
-                if c.get('email') == username:
-                    client_uuid = c.get('id') or c.get('uuid')
-                    break
         except Exception as e:
             logger.error(f"[renew] Error parsing settings: {e}")
             return None, "خطا در خواندن تنظیمات"
-            
-        if not client_uuid:
+
+        clients = settings_obj.get('clients') or []
+        if not isinstance(clients, list):
+            return None, "ساختار کلاینت‌ها نامعتبر است"
+
+        old = None
+        for c in clients:
+            if c.get('email') == username:
+                old = c
+                break
+
+        if not old:
             logger.error(f"[renew] Client {username} not found in inbound {inbound_id}")
             return None, "کلاینت یافت نشد"
-            
-        logger.info(f"[renew] Found client UUID: {client_uuid} for username: {username}")
-        
-        # Use the UUID-based renewal method
-        return self.renew_by_known_uuid_on_inbound(inbound_id, client_uuid, add_gb, add_days)
+
+        try:
+            add_bytes = int(float(add_gb) * (1024 ** 3)) if add_gb and float(add_gb) > 0 else 0
+        except Exception:
+            add_bytes = 0
+
+        cur_total = int(old.get('totalGB', 0) or 0)
+        cur_exp = int(old.get('expiryTime', 0) or 0)
+        now_ms = int(datetime.now().timestamp() * 1000)
+        base_exp = max(cur_exp, now_ms)
+        add_ms = (int(add_days) * 86400 * 1000) if add_days and int(add_days) > 0 else 0
+        target_exp = cur_exp if add_ms == 0 else (base_exp + add_ms)
+        new_total = cur_total if add_bytes == 0 else (cur_total + add_bytes)
+
+        old_uuid = old.get('id') or old.get('uuid') or ''
+        del_eps = [
+            f"{self.base_url}/panel/api/inbounds/delClient",
+            f"{self.base_url}/xui/api/inbounds/delClient",
+            f"{self.base_url}/panel/API/inbounds/delClient",
+            f"{self.base_url}/xui/API/inbounds/delClient",
+            f"{self.base_url}/xui/api/inbound/delClient",
+        ]
+        del_eps = ([f"{e}/{old_uuid}" for e in del_eps] + del_eps) if old_uuid else del_eps
+        headers = {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}
+        deleted = False
+        for ep in del_eps:
+            try:
+                for body in (
+                    {"id": int(inbound_id), "clientId": old_uuid},
+                    {"id": int(inbound_id), "uuid": old_uuid},
+                    {"id": int(inbound_id), "email": username},
+                ):
+                    r = self.session.post(ep, headers=headers, json=body, timeout=12)
+                    if r.status_code in (200, 201, 202, 204):
+                        deleted = True
+                        break
+                if deleted:
+                    break
+            except requests.RequestException:
+                continue
+
+        new_client = {
+            "id": str(uuid.uuid4()),
+            "email": username,
+            "totalGB": new_total,
+            "expiryTime": target_exp,
+            "enable": True,
+            "limitIp": int(old.get('limitIp', 0) or 0),
+            "subId": ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=12)),
+            "reset": 0,
+        }
+
+        add_eps = [
+            f"{self.base_url}/panel/api/inbounds/addClient",
+            f"{self.base_url}/xui/api/inbounds/addClient",
+            f"{self.base_url}/panel/API/inbounds/addClient",
+            f"{self.base_url}/xui/API/inbounds/addClient",
+        ]
+        form_headers = {
+            'Accept': 'application/json',
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'X-Requested-With': 'XMLHttpRequest',
+        }
+        settings_payload = json.dumps({"clients": [new_client]})
+        for ep in add_eps:
+            try:
+                r1 = self.session.post(ep, headers=self._json_headers, json={"id": int(inbound_id), "clients": [new_client]}, timeout=15)
+                if r1.status_code in (200, 201):
+                    return new_client, "Success"
+                r2 = self.session.post(ep, headers=self._json_headers, json={"id": int(inbound_id), "settings": settings_payload}, timeout=15)
+                if r2.status_code in (200, 201):
+                    return new_client, "Success"
+                r3 = self.session.post(ep, headers=form_headers, data={"id": str(int(inbound_id)), "settings": settings_payload}, timeout=15)
+                if r3.status_code in (200, 201):
+                    return new_client, "Success"
+            except requests.RequestException:
+                continue
+
+        return None, "ساخت کلاینت جدید ناموفق بود"
 
     def delete_user_on_inbound(self, inbound_id: int, username: str, client_id: str | None = None):
         """Delete a client from an inbound by email (username) or client_id."""
