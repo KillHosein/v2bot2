@@ -1,6 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 from telegram.constants import ParseMode
+from html import escape as html_escape
 import re
 
 from ..db import query_db, execute_db
@@ -29,19 +30,19 @@ async def admin_panels_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     panels = query_db("SELECT id, name, panel_type, url, COALESCE(sub_base, '') AS sub_base, COALESCE(enabled,1) AS enabled FROM panels ORDER BY id DESC")
 
-    text = "\U0001F4BB **مدیریت پنل‌ها**\n\n"
+    text = "\U0001F4BB <b>مدیریت پنل‌ها</b>\n\n"
     keyboard = []
 
     if not panels:
         text += "هیچ پنلی ثبت نشده است."
     else:
         for p in panels:
-            ptype = p['panel_type']
+            ptype = html_escape(p['panel_type'] or '')
             extra = ''
             if (ptype or '').lower() in ('xui', 'x-ui', 'sanaei'):
-                extra = f"\n   \u27A4 sub base: {p.get('sub_base') or '-'}"
+                extra = f"\n   \u27A4 sub base: {html_escape(p.get('sub_base') or '-') }"
             status = 'فعال' if int(p.get('enabled') or 1) == 1 else 'غیرفعال'
-            text += f"- {p['name']} ({ptype}) | وضعیت: {status}\n   URL: {p['url']}{extra}\n"
+            text += f"- {html_escape(p['name'] or '')} ({ptype}) | وضعیت: {status}\n   URL: {html_escape(p['url'] or '')}{extra}\n"
             keyboard.append([
                 InlineKeyboardButton("مدیریت اینباندها", callback_data=f"panel_inbounds_{p['id']}"),
                 InlineKeyboardButton("\u274C حذف", callback_data=f"panel_delete_{p['id']}")
@@ -57,15 +58,15 @@ async def admin_panels_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     sender = query.message if query else update.message
     if query:
         try:
-            await _safe_edit_text(sender, text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+            await _safe_edit_text(sender, text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
         except Exception:
             try:
-                await query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+                await query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
             except Exception:
                 pass
     else:
         try:
-            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
         except Exception:
             pass
     return ADMIN_PANELS_MENU
