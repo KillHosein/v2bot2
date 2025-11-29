@@ -268,12 +268,19 @@ async def process_renewal_for_order(order_id: int, plan_id: int, context: Contex
                 add_days = int(plan.get('duration_days', 0))
             except Exception:
                 add_days = 0
+            
+            logger.info(f"Processing renewal for {marz_username}: add_gb={add_gb}, add_days={add_days}, inbound={inbound_id}")
+            
             # Recreate-only to avoid updateClient 404s; fallback to panel-level renew
             renewed_user, message = None, None
             if hasattr(api, 'renew_by_recreate_on_inbound'):
                 renewed_user, message = api.renew_by_recreate_on_inbound(inbound_id, marz_username, add_gb, add_days)
+                logger.info(f"renew_by_recreate_on_inbound result: success={bool(renewed_user)} msg={message}")
+            
             if not renewed_user:
+                logger.info("Fallback to renew_user_in_panel")
                 renewed_user, message = await api.renew_user_in_panel(marz_username, plan)
+                logger.info(f"renew_user_in_panel result: success={bool(renewed_user)} msg={message}")
         else:
             try:
                 inbounds, _msg = api.list_inbounds()
