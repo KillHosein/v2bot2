@@ -58,10 +58,10 @@ async def admin_panels_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     sender = query.message if query else update.message
     if query:
         try:
-            await safe_edit_message(query, text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+            await query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
         except Exception:
             try:
-                await query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+                await safe_edit_message(query, text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
             except Exception:
                 pass
     else:
