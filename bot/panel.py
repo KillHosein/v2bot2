@@ -1403,7 +1403,10 @@ class XuiAPI(BasePanelAPI):
                 "enable": True,
                 "limitIp": int(old.get('limitIp', 0) or 0),
                 "subId": ''.join(_rand.choices(_str.ascii_lowercase + _str.digits, k=12)),
-                "reset": 0
+                "reset": 0,
+                "downlink": 0,
+                "uplink": 0,
+                "total": 0,
             }
             add_eps = [
                 f"{self.base_url}/panel/api/inbounds/addClient",
@@ -2914,15 +2917,18 @@ class ThreeXuiAPI(BasePanelAPI):
             except requests.RequestException:
                 continue
 
-        new_client = {
-            "id": str(uuid.uuid4()),
-            "email": username,
-            "totalGB": new_total,
-            "expiryTime": target_exp,
-            "enable": True,
-            "limitIp": int(old.get('limitIp', 0) or 0),
-            "subId": ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=12)),
-            "reset": 0,
+            new_client = {
+                "id": str(uuid.uuid4()),
+                "email": username,
+                "totalGB": new_total,
+                "expiryTime": target_exp,
+                "enable": True,
+                "limitIp": int(old.get('limitIp', 0) or 0),
+                "subId": ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=12)),
+                "reset": 0,
+                "downlink": 0,
+                "uplink": 0,
+                "total": 0,
         }
 
         add_eps = [
