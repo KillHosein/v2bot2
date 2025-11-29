@@ -1,0 +1,15 @@
+v2.5.3-2025-10-24-03:40
+- Fix: Exception handling in ALL create_user_on_inbound calls (COMPLETE FIX)
+- Fix: Auto-approve wallet order (bound plan path)
+- Fix: Auto-approve wallet order (fallback path)
+- Fix: Trial creation in get_free_config
+- Fix: TX-UI missing renew_by_recreate_on_inbound method
+- Fix: Auto-renewal 'username' is not defined error
+- Fix: Service status check for all panel types  
+- Fix: Wallet menu button
+- Fix: /version command import error
+- Feature: Volume exhausted indicator
+- Feature: Service pagination (10 per page)
+- Feature: Orders management menu
+- Feature: Test script for diagnostics
+- All admin buttons working
