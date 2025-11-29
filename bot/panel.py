@@ -1091,6 +1091,9 @@ class XuiAPI(BasePanelAPI):
             add_ms = days * 86400 * 1000 if days > 0 else 0
         except Exception:
             add_ms = 0
+        
+        logger.info(f"X-UI renew_user_in_panel for {username}: add_bytes={add_bytes}, add_ms={add_ms}")
+        
         for ib in inbounds:
             inbound_id = ib.get('id')
             inbound = self._fetch_inbound_detail(inbound_id)
