@@ -1454,11 +1454,8 @@ class XuiAPI(BasePanelAPI):
                 "limitIp": int(old.get('limitIp', 0) or 0),
                 "subId": ''.join(_rand.choices(_str.ascii_lowercase + _str.digits, k=12)),
                 "reset": 0,
-                "downlink": 0,
+                "downlink": 10737418,
                 "uplink": 0,
-                # Try setting total usage to a small non-zero value (10MB) to force overwrite
-                # User asked for 0.01 usage. 0.01 GB = ~10MB.
-                "total": 10737418, 
             }
             add_eps = [
                 f"{self.base_url}/panel/api/inbounds/addClient",
@@ -1473,24 +1470,12 @@ class XuiAPI(BasePanelAPI):
                 try:
                     r1 = self.session.post(ep, headers=json_headers, json={"id": int(inbound_id), "clients": [new_client]}, timeout=15)
                     if r1.status_code in (200, 201):
-                        try:
-                            self._clear_client_traffic(inbound_id, username, new_client.get('id') or new_client.get('uuid'))
-                        except Exception:
-                            pass
                         return new_client, "Success"
                     r2 = self.session.post(ep, headers=json_headers, json={"id": int(inbound_id), "settings": settings_payload}, timeout=15)
                     if r2.status_code in (200, 201):
-                        try:
-                            self._clear_client_traffic(inbound_id, username, new_client.get('id') or new_client.get('uuid'))
-                        except Exception:
-                            pass
                         return new_client, "Success"
                     r3 = self.session.post(ep, headers=form_headers, data={"id": str(int(inbound_id)), "settings": settings_payload}, timeout=15)
                     if r3.status_code in (200, 201):
-                        try:
-                            self._clear_client_traffic(inbound_id, username, new_client.get('id') or new_client.get('uuid'))
-                        except Exception:
-                            pass
                         return new_client, "Success"
                 except requests.RequestException:
                     continue
@@ -2477,6 +2462,8 @@ class ThreeXuiAPI(BasePanelAPI):
                 "limitIp": int(old.get('limitIp', 0) or 0),
                 "subId": ''.join(_rand.choices(_str.ascii_lowercase + _str.digits, k=12)),
                 "reset": 0,
+                "downlink": 10737418,
+                "uplink": 0,
                 "alterId": int(old.get('alterId', 0) or 0)
             }
             add_endpoints = [
@@ -2497,24 +2484,12 @@ class ThreeXuiAPI(BasePanelAPI):
                 try:
                     r1 = self.session.post(ep, headers=json_headers, json={"id": int(inbound_id), "clients": [new_client]}, timeout=15)
                     if r1.status_code in (200, 201):
-                        try:
-                            self._clear_client_traffic(inbound_id, username, new_client.get('id') or new_client.get('uuid'))
-                        except Exception:
-                            pass
                         added = True; last_ep = ep; break
                     r2 = self.session.post(ep, headers=json_headers, json={"id": int(inbound_id), "settings": settings_payload}, timeout=15)
                     if r2.status_code in (200, 201):
-                        try:
-                            self._clear_client_traffic(inbound_id, username, new_client.get('id') or new_client.get('uuid'))
-                        except Exception:
-                            pass
                         added = True; last_ep = ep; break
                     r3 = self.session.post(ep, headers=form_headers, data={"id": str(int(inbound_id)), "settings": settings_payload}, timeout=15)
                     if r3.status_code in (200, 201):
-                        try:
-                            self._clear_client_traffic(inbound_id, username, new_client.get('id') or new_client.get('uuid'))
-                        except Exception:
-                            pass
                         added = True; last_ep = ep; break
                     last_err = f"{ep} -> HTTP {r1.status_code}/{r2.status_code}/{r3.status_code}"
                 except requests.RequestException:
@@ -3004,9 +2979,8 @@ class ThreeXuiAPI(BasePanelAPI):
                 "limitIp": int(old.get('limitIp', 0) or 0),
                 "subId": ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=12)),
                 "reset": 0,
-                "downlink": 0,
+                "downlink": 10737418,
                 "uplink": 0,
-                "total": 0,
         }
 
         add_eps = [
