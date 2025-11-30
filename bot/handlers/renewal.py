@@ -278,9 +278,9 @@ async def process_renewal_for_order(order_id: int, plan_id: int, context: Contex
                 logger.info(f"renew_by_recreate_on_inbound result: success={bool(renewed_user)} msg={message}")
             
             if not renewed_user:
-                logger.info("Fallback to renew_user_in_panel")
-                renewed_user, message = await api.renew_user_in_panel(marz_username, plan)
-                logger.info(f"renew_user_in_panel result: success={bool(renewed_user)} msg={message}")
+                logger.info("Fallback to renew_user_on_inbound")
+                renewed_user, message = api.renew_user_on_inbound(inbound_id, marzban_username, add_gb, add_days)
+                logger.info(f"renew_user_on_inbound result: success={bool(renewed_user)} msg={message}")
         else:
             try:
                 inbounds, _msg = api.list_inbounds()
