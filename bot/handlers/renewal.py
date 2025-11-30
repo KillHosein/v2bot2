@@ -312,6 +312,8 @@ async def process_renewal_for_order(order_id: int, plan_id: int, context: Contex
                     inbound_id = 0
             if inbound_id:
                 renewed_user, message = api.renew_by_recreate_on_inbound(inbound_id, marz_username, float(plan.get('traffic_gb', 0) or 0), int(plan.get('duration_days', 0) or 0))
+                if not renewed_user:
+                    renewed_user, message = api.renew_user_on_inbound(inbound_id, marz_username, float(plan.get('traffic_gb', 0) or 0), int(plan.get('duration_days', 0) or 0))
             else:
                 renewed_user, message = await api.renew_user_in_panel(marz_username, plan)
     elif panel_type in ('3xui','3x-ui','3x ui','xui','x-ui','sanaei','alireza','txui','tx-ui','tx ui'):
@@ -337,10 +339,9 @@ async def process_renewal_for_order(order_id: int, plan_id: int, context: Contex
                 logger.info(f"[ELIF] renew_by_recreate_on_inbound result: success={bool(renewed_user)} msg={message}")
             
             if not renewed_user:
-                logger.info("[ELIF] Fallback to renew_user_in_panel")
-                # Fallback to panel-level renew (e.g., Marzban-like) as last resort
-                renewed_user, message = await api.renew_user_in_panel(marz_username, plan)
-                logger.info(f"[ELIF] renew_user_in_panel result: success={bool(renewed_user)} msg={message}")
+                logger.info("[ELIF] Fallback to renew_user_on_inbound")
+                renewed_user, message = api.renew_user_on_inbound(inbound_id, marz_username, add_gb, add_days)
+                logger.info(f"[ELIF] renew_user_on_inbound result: success={bool(renewed_user)} msg={message}")
         else:
             try:
                 inbounds, _msg = api.list_inbounds()
@@ -372,6 +373,8 @@ async def process_renewal_for_order(order_id: int, plan_id: int, context: Contex
                     inbound_id = 0
             if inbound_id:
                 renewed_user, message = api.renew_by_recreate_on_inbound(inbound_id, marz_username, float(plan.get('traffic_gb', 0) or 0), int(plan.get('duration_days', 0) or 0))
+                if not renewed_user:
+                    renewed_user, message = api.renew_user_on_inbound(inbound_id, marz_username, float(plan.get('traffic_gb', 0) or 0), int(plan.get('duration_days', 0) or 0))
             else:
                 renewed_user, message = await api.renew_user_in_panel(marz_username, plan)
     else:
