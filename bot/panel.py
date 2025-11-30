@@ -1456,7 +1456,9 @@ class XuiAPI(BasePanelAPI):
                 "reset": 0,
                 "downlink": 0,
                 "uplink": 0,
-                "total": 0,
+                # Try setting total usage to a small non-zero value (10MB) to force overwrite
+                # User asked for 0.01 usage. 0.01 GB = ~10MB.
+                "total": 10737418, 
             }
             add_eps = [
                 f"{self.base_url}/panel/api/inbounds/addClient",
@@ -2520,6 +2522,8 @@ class ThreeXuiAPI(BasePanelAPI):
                     continue
 
             if not added:
+                # Attempt update if add failed (maybe it wasn't fully deleted or panel reused it)
+                # But if we failed to add, we can't do much.
                 return None, (last_err or "ساخت کلاینت جدید ناموفق بود")
 
             ref = self._fetch_inbound_detail(inbound_id)
