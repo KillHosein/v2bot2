@@ -2676,6 +2676,10 @@ class ThreeXuiAPI(BasePanelAPI):
             add_ms = days * 86400 * 1000 if days > 0 else 0
         except Exception:
             add_ms = 0
+        try:
+            logger.info(f"[3xui] renew_user_in_panel: username={username} add_bytes={add_bytes} add_ms={add_ms} inbound_count={len(inbounds)}")
+        except Exception:
+            pass
         for ib in inbounds:
             inbound_id = ib.get('id')
             inbound = self._fetch_inbound_detail(inbound_id)
@@ -2702,13 +2706,37 @@ class ThreeXuiAPI(BasePanelAPI):
                     updated['totalGB'] = new_total
                     settings_payload = json.dumps({"clients": [updated]})
                     payload = {"id": int(inbound_id), "settings": settings_payload}
-                    for up in ["/xui/api/inbounds/updateClient", "/panel/api/inbounds/updateClient", "/xui/api/inbound/updateClient"]:
+                    endpoints = [
+                        "/xui/api/inbounds/updateClient",
+                        "/panel/api/inbounds/updateClient",
+                        "/xui/api/inbound/updateClient",
+                    ]
+                    last_ep = None; last_code = None; last_err = None
+                    for up in endpoints:
                         try:
-                            resp = self.session.post(f"{self.base_url}{up}", headers={'Content-Type': 'application/json'}, json=payload, timeout=15)
-                            if resp.status_code in (200, 201):
-                                return updated, "Success"
-                        except requests.RequestException:
+                            url = f"{self.base_url}{up}"
+                            resp = self.session.post(url, headers={'Content-Type': 'application/json'}, json=payload, timeout=15)
+                            last_ep = url; last_code = resp.status_code
+                            if resp.status_code in (200, 201, 202, 204):
+                                # verify by refetching inbound settings
+                                ref = self._fetch_inbound_detail(inbound_id)
+                                try:
+                                    robj = json.loads(ref.get('settings')) if isinstance(ref.get('settings'), str) else (ref.get('settings') or {})
+                                except Exception:
+                                    robj = {}
+                                for c2 in (robj.get('clients') or []):
+                                    if c2.get('email') == username and int(c2.get('totalGB', 0) or 0) == new_total and int(c2.get('expiryTime', 0) or 0) == target_exp:
+                                        return updated, "Success"
+                                # If panel returns success but verification didn't match, continue trying next endpoint
+                            else:
+                                last_err = f"HTTP {resp.status_code}: {(resp.text or '')[:180]}"
+                        except requests.RequestException as e:
+                            last_err = f"EXC: {e}"
                             continue
+                    try:
+                        logger.error(f"[3xui] renew_user_in_panel failed: inbound={inbound_id} endpoint={last_ep} status={last_code} err={last_err}")
+                    except Exception:
+                        pass
                     return None, "به‌روزرسانی کلاینت ناموفق بود"
         return None, "کلاینت برای تمدید یافت نشد"
 
