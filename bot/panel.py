@@ -1470,13 +1470,43 @@ class XuiAPI(BasePanelAPI):
                 try:
                     r1 = self.session.post(ep, headers=json_headers, json={"id": int(inbound_id), "clients": [new_client]}, timeout=15)
                     if r1.status_code in (200, 201):
-                        return new_client, "Success"
+                        ref = self._fetch_inbound_detail(inbound_id)
+                        try:
+                            robj = _json.loads(ref.get('settings')) if isinstance(ref.get('settings'), str) else (ref.get('settings') or {})
+                        except Exception:
+                            robj = {}
+                        for c2 in (robj.get('clients') or []):
+                            if c2.get('email') == username:
+                                at_total = int(c2.get('totalGB', 0) or 0)
+                                at_exp = int(c2.get('expiryTime', 0) or 0)
+                                if at_total >= new_total and (at_exp == target_exp or at_exp >= target_exp):
+                                    return new_client, "Success"
                     r2 = self.session.post(ep, headers=json_headers, json={"id": int(inbound_id), "settings": settings_payload}, timeout=15)
                     if r2.status_code in (200, 201):
-                        return new_client, "Success"
+                        ref = self._fetch_inbound_detail(inbound_id)
+                        try:
+                            robj = _json.loads(ref.get('settings')) if isinstance(ref.get('settings'), str) else (ref.get('settings') or {})
+                        except Exception:
+                            robj = {}
+                        for c2 in (robj.get('clients') or []):
+                            if c2.get('email') == username:
+                                at_total = int(c2.get('totalGB', 0) or 0)
+                                at_exp = int(c2.get('expiryTime', 0) or 0)
+                                if at_total >= new_total and (at_exp == target_exp or at_exp >= target_exp):
+                                    return new_client, "Success"
                     r3 = self.session.post(ep, headers=form_headers, data={"id": str(int(inbound_id)), "settings": settings_payload}, timeout=15)
                     if r3.status_code in (200, 201):
-                        return new_client, "Success"
+                        ref = self._fetch_inbound_detail(inbound_id)
+                        try:
+                            robj = _json.loads(ref.get('settings')) if isinstance(ref.get('settings'), str) else (ref.get('settings') or {})
+                        except Exception:
+                            robj = {}
+                        for c2 in (robj.get('clients') or []):
+                            if c2.get('email') == username:
+                                at_total = int(c2.get('totalGB', 0) or 0)
+                                at_exp = int(c2.get('expiryTime', 0) or 0)
+                                if at_total >= new_total and (at_exp == target_exp or at_exp >= target_exp):
+                                    return new_client, "Success"
                 except requests.RequestException:
                     continue
 
