@@ -2060,7 +2060,7 @@ class ThreeXuiAPI(BasePanelAPI):
                 # 1) clients array JSON
                 payload1 = {"id": int(inbound_id), "clients": [client_obj]}
                 r1 = self.session.post(ep, headers=self._json_headers, json=payload1, timeout=15)
-                if r1.status_code in (200, 201):
+                if r1.status_code in (200, 201, 202, 204):
                     try:
                         j1 = r1.json()
                     except ValueError:
@@ -2075,7 +2075,7 @@ class ThreeXuiAPI(BasePanelAPI):
                 settings_obj = {"clients": [client_obj]}
                 payload2 = {"id": int(inbound_id), "settings": json.dumps(settings_obj)}
                 r2 = self.session.post(ep, headers=self._json_headers, json=payload2, timeout=15)
-                if r2.status_code in (200, 201):
+                if r2.status_code in (200, 201, 202, 204):
                     try:
                         j2 = r2.json()
                     except ValueError:
@@ -2093,7 +2093,7 @@ class ThreeXuiAPI(BasePanelAPI):
                     'X-Requested-With': 'XMLHttpRequest',
                 }
                 r3 = self.session.post(ep, headers=form_headers, data={'id': str(int(inbound_id)), 'settings': json.dumps(settings_obj)}, timeout=15)
-                if r3.status_code in (200, 201):
+                if r3.status_code in (200, 201, 202, 204):
                     try:
                         j3 = r3.json()
                     except ValueError:
@@ -2501,7 +2501,21 @@ class ThreeXuiAPI(BasePanelAPI):
                 f"{self.base_url}/panel/api/inbounds/addClient",
                 f"{self.base_url}/xui/API/inbounds/addClient",
                 f"{self.base_url}/panel/API/inbounds/addClient",
+                f"{self.base_url}/xui/api/inbound/addClient",
+                f"{self.base_url}/panel/api/inbound/addClient",
+                f"{self.base_url}/xui/API/inbound/addClient",
+                f"{self.base_url}/panel/API/inbound/addClient",
             ]
+            add_endpoints = ([f"{e}/{int(inbound_id)}" for e in add_endpoints] + add_endpoints + [
+                f"{self.base_url}/xui/api/inbounds/{int(inbound_id)}/addClient",
+                f"{self.base_url}/panel/api/inbounds/{int(inbound_id)}/addClient",
+                f"{self.base_url}/xui/API/inbounds/{int(inbound_id)}/addClient",
+                f"{self.base_url}/panel/API/inbounds/{int(inbound_id)}/addClient",
+                f"{self.base_url}/xui/api/inbound/{int(inbound_id)}/addClient",
+                f"{self.base_url}/panel/api/inbound/{int(inbound_id)}/addClient",
+                f"{self.base_url}/xui/API/inbound/{int(inbound_id)}/addClient",
+                f"{self.base_url}/panel/API/inbound/{int(inbound_id)}/addClient",
+            ])
             form_headers = {
                 'Accept': 'application/json',
                 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
@@ -2513,13 +2527,13 @@ class ThreeXuiAPI(BasePanelAPI):
             for ep in add_endpoints:
                 try:
                     r1 = self.session.post(ep, headers=json_headers, json={"id": int(inbound_id), "clients": [new_client]}, timeout=15)
-                    if r1.status_code in (200, 201):
+                    if r1.status_code in (200, 201, 202, 204):
                         added = True; last_ep = ep; break
                     r2 = self.session.post(ep, headers=json_headers, json={"id": int(inbound_id), "settings": settings_payload}, timeout=15)
-                    if r2.status_code in (200, 201):
+                    if r2.status_code in (200, 201, 202, 204):
                         added = True; last_ep = ep; break
                     r3 = self.session.post(ep, headers=form_headers, data={"id": str(int(inbound_id)), "settings": settings_payload}, timeout=15)
-                    if r3.status_code in (200, 201):
+                    if r3.status_code in (200, 201, 202, 204):
                         added = True; last_ep = ep; break
                     last_err = f"{ep} -> HTTP {r1.status_code}/{r2.status_code}/{r3.status_code}"
                 except requests.RequestException:
@@ -3000,17 +3014,18 @@ class ThreeXuiAPI(BasePanelAPI):
             except requests.RequestException:
                 continue
 
-            new_client = {
-                "id": str(uuid.uuid4()),
-                "email": username,
-                "totalGB": new_total,
-                "expiryTime": target_exp,
-                "enable": True,
-                "limitIp": int(old.get('limitIp', 0) or 0),
-                "subId": ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=12)),
-                "reset": 0,
-                "downlink": 10737418,
-                "uplink": 0,
+        new_client = {
+            "id": str(uuid.uuid4()),
+            "email": username,
+            "totalGB": new_total,
+            "expiryTime": target_exp,
+            "enable": True,
+            "limitIp": int(old.get('limitIp', 0) or 0),
+            "subId": ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=12)),
+            "reset": 0,
+            "downlink": 10737418,
+            "uplink": 0,
+            "alterId": int(old.get('alterId', 0) or 0),
         }
 
         add_eps = [
