@@ -1,5 +1,6 @@
 from datetime import datetime
 import json
+from typing import Tuple, Optional
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes, ConversationHandler
@@ -15,6 +16,48 @@ from ..helpers.flow import set_flow, clear_flow
 from ..helpers.tg import notify_admins, append_footer_buttons as _footer, safe_edit_text as _safe_edit_text
 from ..helpers.admin_notifications import send_renewal_log
 from ..config import logger
+
+
+def _get_additions_from_plan(plan: dict) -> Tuple[float, int]:
+    """Safely extract GB and day deltas from a plan record."""
+    add_gb = 0.0
+    add_days = 0
+    try:
+        add_gb = float(plan.get('traffic_gb', 0))
+    except Exception:
+        add_gb = 0.0
+    try:
+        add_days = int(plan.get('duration_days', 0))
+    except Exception:
+        add_days = 0
+    return add_gb, add_days
+
+
+def _find_inbound_id(api: VpnPanelAPI, marz_username: str) -> Optional[int]:
+    """Search all inbounds for a client email matching marz_username."""
+    try:
+        inbounds, _msg = api.list_inbounds()
+    except Exception:
+        return None
+
+    for ib in inbounds or []:
+        inbound_id = ib.get('id')
+        inbound = None
+        try:
+            inbound = api._fetch_inbound_detail(inbound_id)
+        except Exception:
+            inbound = None
+        if not inbound:
+            continue
+        settings_str = inbound.get('settings')
+        try:
+            settings_obj = json.loads(settings_str) if isinstance(settings_str, str) else {}
+        except Exception:
+            settings_obj = {}
+        for c in (settings_obj.get('clients') or []):
+            if c.get('email') == marz_username:
+                return inbound_id
+    return None
 
 
 async def start_renewal_flow(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -257,125 +300,61 @@ async def process_renewal_for_order(order_id: int, plan_id: int, context: Contex
     panel_type = (query_db("SELECT panel_type FROM panels WHERE id = ?", (order['panel_id'],), one=True) or {}).get('panel_type', '').lower()
     if panel_type in ('3xui','3x-ui','3x ui'):
         inbound_id = int(order.get('xui_inbound_id') or 0)
+        add_gb, add_days = _get_additions_from_plan(plan)
+
         if inbound_id:
-            add_gb = 0.0
-            add_days = 0
-            try:
-                add_gb = float(plan.get('traffic_gb', 0))
-            except Exception:
-                add_gb = 0.0
-            try:
-                add_days = int(plan.get('duration_days', 0))
-            except Exception:
-                add_days = 0
-            
             logger.info(f"Processing renewal for {marz_username}: add_gb={add_gb}, add_days={add_days}, inbound={inbound_id}")
-            
+
             # Recreate-only to avoid updateClient 404s; fallback to panel-level renew
             renewed_user, message = None, None
             if hasattr(api, 'renew_by_recreate_on_inbound'):
                 renewed_user, message = api.renew_by_recreate_on_inbound(inbound_id, marz_username, add_gb, add_days)
                 logger.info(f"renew_by_recreate_on_inbound result: success={bool(renewed_user)} msg={message}")
-            
+
             if not renewed_user:
                 logger.info("Fallback to renew_user_on_inbound")
-                renewed_user, message = api.renew_user_on_inbound(inbound_id, marzban_username, add_gb, add_days)
+                renewed_user, message = api.renew_user_on_inbound(inbound_id, marz_username, add_gb, add_days)
                 logger.info(f"renew_user_on_inbound result: success={bool(renewed_user)} msg={message}")
         else:
-            try:
-                inbounds, _msg = api.list_inbounds()
-            except Exception:
-                inbounds = None
-            if inbounds:
-                try:
-                    for ib in inbounds:
-                        _id = ib.get('id')
-                        inbound = None
-                        try:
-                            inbound = api._fetch_inbound_detail(_id)
-                        except Exception:
-                            inbound = None
-                        if not inbound:
-                            continue
-                        settings_str = inbound.get('settings')
-                        try:
-                            settings_obj = json.loads(settings_str) if isinstance(settings_str, str) else {}
-                        except Exception:
-                            settings_obj = {}
-                        for c in (settings_obj.get('clients') or []):
-                            if c.get('email') == marz_username:
-                                inbound_id = _id
-                                break
-                        if inbound_id:
-                            break
-                except Exception:
-                    inbound_id = 0
+            inbound_id = _find_inbound_id(api, marz_username) or 0
             if inbound_id:
-                renewed_user, message = api.renew_by_recreate_on_inbound(inbound_id, marz_username, float(plan.get('traffic_gb', 0) or 0), int(plan.get('duration_days', 0) or 0))
+                execute_db("UPDATE orders SET xui_inbound_id = ? WHERE id = ?", (inbound_id, order_id))
+                logger.info(f"Found inbound {inbound_id} for {marz_username} via search; persisted for future renewals")
+
+                renewed_user, message = api.renew_by_recreate_on_inbound(inbound_id, marz_username, add_gb, add_days)
                 if not renewed_user:
-                    renewed_user, message = api.renew_user_on_inbound(inbound_id, marz_username, float(plan.get('traffic_gb', 0) or 0), int(plan.get('duration_days', 0) or 0))
+                    renewed_user, message = api.renew_user_on_inbound(inbound_id, marz_username, add_gb, add_days)
             else:
+                logger.warning(f"No inbound found for {marz_username}; falling back to panel-level renew")
                 renewed_user, message = await api.renew_user_in_panel(marz_username, plan)
     elif panel_type in ('3xui','3x-ui','3x ui','xui','x-ui','sanaei','alireza','txui','tx-ui','tx ui'):
         inbound_id = int(order.get('xui_inbound_id') or 0)
+        add_gb, add_days = _get_additions_from_plan(plan)
+
         if inbound_id:
-            add_gb = 0.0
-            add_days = 0
-            try:
-                add_gb = float(plan.get('traffic_gb', 0))
-            except Exception:
-                add_gb = 0.0
-            try:
-                add_days = int(plan.get('duration_days', 0))
-            except Exception:
-                add_days = 0
-            
             logger.info(f"[ELIF] Processing renewal for {marz_username}: add_gb={add_gb}, add_days={add_days}, inbound={inbound_id}")
-            
+
             # Recreate-only for X-UI/3x-UI/TX-UI to avoid 404 update endpoints
             renewed_user, message = None, None
             if hasattr(api, 'renew_by_recreate_on_inbound'):
                 renewed_user, message = api.renew_by_recreate_on_inbound(inbound_id, marz_username, add_gb, add_days)
                 logger.info(f"[ELIF] renew_by_recreate_on_inbound result: success={bool(renewed_user)} msg={message}")
-            
+
             if not renewed_user:
                 logger.info("[ELIF] Fallback to renew_user_on_inbound")
                 renewed_user, message = api.renew_user_on_inbound(inbound_id, marz_username, add_gb, add_days)
                 logger.info(f"[ELIF] renew_user_on_inbound result: success={bool(renewed_user)} msg={message}")
         else:
-            try:
-                inbounds, _msg = api.list_inbounds()
-            except Exception:
-                inbounds = None
-            if inbounds:
-                try:
-                    for ib in inbounds:
-                        _id = ib.get('id')
-                        inbound = None
-                        try:
-                            inbound = api._fetch_inbound_detail(_id)
-                        except Exception:
-                            inbound = None
-                        if not inbound:
-                            continue
-                        settings_str = inbound.get('settings')
-                        try:
-                            settings_obj = json.loads(settings_str) if isinstance(settings_str, str) else {}
-                        except Exception:
-                            settings_obj = {}
-                        for c in (settings_obj.get('clients') or []):
-                            if c.get('email') == marz_username:
-                                inbound_id = _id
-                                break
-                        if inbound_id:
-                            break
-                except Exception:
-                    inbound_id = 0
+            inbound_id = _find_inbound_id(api, marz_username) or 0
             if inbound_id:
-                renewed_user, message = api.renew_by_recreate_on_inbound(inbound_id, marz_username, float(plan.get('traffic_gb', 0) or 0), int(plan.get('duration_days', 0) or 0))
+                execute_db("UPDATE orders SET xui_inbound_id = ? WHERE id = ?", (inbound_id, order_id))
+                logger.info(f"[ELIF] Found inbound {inbound_id} for {marz_username} via search; persisted for future renewals")
+
+                renewed_user, message = api.renew_by_recreate_on_inbound(inbound_id, marz_username, add_gb, add_days)
                 if not renewed_user:
-                    renewed_user, message = api.renew_user_on_inbound(inbound_id, marz_username, float(plan.get('traffic_gb', 0) or 0), int(plan.get('duration_days', 0) or 0))
+                    renewed_user, message = api.renew_user_on_inbound(inbound_id, marz_username, add_gb, add_days)
             else:
+                logger.warning(f"[ELIF] No inbound found for {marz_username}; falling back to panel-level renew")
                 renewed_user, message = await api.renew_user_in_panel(marz_username, plan)
     else:
         renewed_user, message = await api.renew_user_in_panel(marz_username, plan)
