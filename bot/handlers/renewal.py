@@ -279,7 +279,7 @@ async def process_renewal_for_order(order_id: int, plan_id: int, context: Contex
             
             if not renewed_user:
                 logger.info("Fallback to renew_user_on_inbound")
-                renewed_user, message = api.renew_user_on_inbound(inbound_id, marzban_username, add_gb, add_days)
+                renewed_user, message = api.renew_user_on_inbound(inbound_id, marz_username, add_gb, add_days)
                 logger.info(f"renew_user_on_inbound result: success={bool(renewed_user)} msg={message}")
         else:
             try:
